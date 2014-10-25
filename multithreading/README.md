@@ -1,4 +1,4 @@
-Assignment 2
+Assignment 2 - Multithreading
 =============
 
 Study the example program in the attached file. This program creates a new thread. Both the main thread and the new thread then increment the variable counter infinitely. After incrementing the value of counter, each thread prints a message showing the value of the variable. One of the threads exits when it finds that the counter value has exceeded 25. Run the program and explain the output. Why do the print statements stop appearing after a certain point in the program ? Explain.
