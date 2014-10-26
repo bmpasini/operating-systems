@@ -5,9 +5,9 @@ I will start the explanation with a description of how the program works.
 
 The main function initializes a mutex and also creates a thread, in which the child1 function will run.
 
-In sequence, it locks the mutex, in order to increase the counter, print its value and then it unlocks the mutex. All of this happens in an infinite loop.
+In sequence, it locks the mutex, increase the counter by 1, print its value and then it unlocks the mutex. All of this happens in an infinite loop.
 
-Meanwhile, the child1 function starts running concurrently. It locks the same mutex, which, if already locked, will put the child1 function in blocked state, until the mutex is unlocked by the function that locked it at the first place, which, in this case is the main function. Then, the child1 function locks the mutex and goes to the ready queue, to be runned by the processor. Then, it increases the counter, prints its value and unlocks the mutex. All of this also happens in an infinite loop.
+Meanwhile, the child1 function starts running concurrently. It locks the same mutex, which, if already locked, will put the child1 function in blocked state, until the mutex is unlocked by the function that locked it at the first place, which, in this case is the main function. Then, the child1 function locks the mutex and goes to the ready queue, to be run by the processor. Then, it increases the counter by 1, prints its value and unlocks the mutex. All of this also happens in an infinite loop.
 
 The same procedure happens in the main function if its mutex locks while child1 has it locked already, then the former has to wait for the latter to unlock the mutex, going through the steps explained above.
 
