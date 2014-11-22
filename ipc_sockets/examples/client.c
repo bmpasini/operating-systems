@@ -34,16 +34,14 @@ int main(void)
  
   while((n = read(sockfd, recvBuff, sizeof(recvBuff)-1)) > 0)
   {
-    
     recvBuff[n] = 0;
-    // If buffer is empty print an error
     if(fputs(recvBuff, stdout) == EOF) {
       printf("\n Error : Fputs error");
     }
     printf("\n");
   }
  
-  if( n < 0)
+  if(n < 0)
     {
       printf("\n Read Error \n");
     }

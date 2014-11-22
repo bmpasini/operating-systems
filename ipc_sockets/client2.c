@@ -8,11 +8,24 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <ctype.h>
 
 #define PORT "5000" // the port client will be connecting to 
+#define MAXDATASIZE 100 // max number of bytes we can get at once 
 
+int digits_in_str(char *s)
+{
+    int i = 0;
+    while (*s != '\0') {
+    	if (isdigit(*s)) // counting number of digits
+       		i++;
+    s++;
+    }
 
-// get sockaddr, IPv4 or IPv6
+    return i;
+}
+
+// get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET) {
@@ -28,12 +41,20 @@ int main(void)
 	// Variables declaration
 	// ****************************************************
 
-	int sockfd;  
+	int sockfd, numbytes;  
+	char buf[MAXDATASIZE];
 	struct addrinfo hints, *servinfo, *p;
 	int rv;
 	char s[INET6_ADDRSTRLEN];
 	int infinite_loop = 1;
-	char *user_input = malloc(sizeof(char)*BUFSIZ);
+	FILE *digits;
+
+	// ****************************************************
+	// Output file 'digits.out' created
+	// ****************************************************
+
+	digits = fopen("digits.out","w");
+	fclose(digits);
 
 	// ****************************************************
 	// Setup of sockets communication
@@ -45,8 +66,7 @@ int main(void)
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
 
-		// ipconfig getifaddr en1
-		if ((rv = getaddrinfo("192.168.0.4", PORT, &hints, &servinfo)) != 0) {
+		if ((rv = getaddrinfo("127.0.0.1", PORT, &hints, &servinfo)) != 0) {
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 			return 1;
 		}
@@ -79,25 +99,39 @@ int main(void)
 
 		freeaddrinfo(servinfo); // all done with this structure
 
-		// ****************************************************
-		// Get input and send it to server
-		// ****************************************************
+		if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
+		    perror("recv");
+		    exit(1);
+		}
+
+		buf[numbytes] = '\0';
+
+		printf("client: received '%s'\n",buf);
 
 
-		// User is asked for an alpha numeric string input
-		printf("Enter an alpha numeric string: ");
-		fgets(user_input, BUFSIZ, stdin);
 
-		// If the input string is "quit" the infinite loop is interrupted, so that the socket can be closed
-		if (strncmp(user_input, "quit", 4) == 0) {
+
+
+		// If the input string is "quit" the infinite loop is interrupted
+		if (strncmp(buf, "quit", 4) == 0) {
 			infinite_loop = 0;
 		}
-		
-		// Send input to server
-		if (send(sockfd, user_input, strlen(user_input), 0) == -1)
-			perror("send");
 
-		// Close socket
+		// The 'digits.out' file is opened so that the buffer can be appended into it
+		digits = fopen ("digits.out","a");
+
+		// The number of digits in the input string is written in the output 'digits.out' file
+		fprintf(digits, "%d: ", digits_in_str(buf));
+		// Then, the input string is written in the output 'digits.out' file
+		fputs(buf, digits);
+		// The output file is closed
+		fclose(digits);
+		
+		
+
+
+
+
 		close(sockfd);
 	}
 

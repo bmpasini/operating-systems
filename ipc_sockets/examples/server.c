@@ -37,7 +37,6 @@ int main(void)
   
   while(1)
   {
-    
     connfd = accept(listenfd, (struct sockaddr*)NULL ,NULL); // accept awaiting request
 
     strcpy(sendBuff, "Message from server");

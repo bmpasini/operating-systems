@@ -10,24 +10,9 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include <ctype.h>
 
 #define PORT "5000"  // the port users will be connecting to
 #define BACKLOG 10	 // how many pending connections queue will hold
-#define MAXDATASIZE 100 // max number of bytes we can get at once 
-
-// function for finding the number of digits in a string
-int digits_in_str(char *s)
-{
-    int i = 0;
-    while (*s != '\0') {
-    	if (isdigit(*s)) // counting number of digits
-       		i++;
-    s++;
-    }
-
-    return i;
-}
 
 void sigchld_handler(int s)
 {
@@ -58,17 +43,8 @@ int main(void)
 	int yes=1;
 	char s[INET6_ADDRSTRLEN];
 	int rv;
-	int numbytes;
-	char buf[MAXDATASIZE];
 	int infinite_loop = 1;
-	FILE *digits;
-
-	// ****************************************************
-	// Output file 'digits.out' created
-	// ****************************************************
-
-	digits = fopen("digits.out","w");
-	fclose(digits);
+	char *user_input = malloc(sizeof(char)*BUFSIZ);
 
 	// ****************************************************
 	// Setup of sockets communication
@@ -141,40 +117,37 @@ int main(void)
 			continue;
 		}
 
-		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
+		inet_ntop(their_addr.ss_family,
+			get_in_addr((struct sockaddr *)&their_addr),
+			s, sizeof s);
 		printf("server: got connection from %s\n", s);
 
-		// ****************************************************
-		// Get input string from client, count number of digits
-		// and output them in the file 'digits.out'
-		// ****************************************************
-
-		if ((numbytes = recv(new_fd, buf, MAXDATASIZE-1, 0)) == -1) {
-			perror("recv");
-			exit(1);
-		}
-
-		buf[numbytes] = '\0';
-
-		printf("SERVER: received '%s'\n",buf);
 
 
-		// If the input string is "quit" the infinite loop is interrupted
-		if (strncmp(buf, "quit", 4) == 0) {
+
+
+
+		// User is asked for an alpha numeric string input
+		printf("Enter an alpha numeric string: ");
+		fgets(user_input, BUFSIZ, stdin);
+
+		// If the input string is "quit" the infinite loop is interrupted, so that the socket can be closed
+		if (strncmp(user_input, "quit", 4) == 0) {
 			infinite_loop = 0;
 		}
 
-		// The 'digits.out' file is opened so that the buffer can be appended into it
-		digits = fopen ("digits.out","a");
 
-		// The number of digits in the input string is written in the output 'digits.out' file
-		fprintf(digits, "%d: ", digits_in_str(buf));
-		// Then, the input string is written in the output 'digits.out' file
-		fputs(buf, digits);
-		// The output file is closed
-		fclose(digits);
-		// Close socket that was accepted, so that it can accept the next one
-		close(new_fd);
+
+		
+
+		if (!fork()) { // this is the child process
+			close(sockfd); // child doesn't need the listener
+			if (send(new_fd, user_input, strlen(user_input), 0) == -1)
+				perror("send");
+			close(new_fd);
+			exit(0);
+		}
+		close(new_fd);  // parent doesn't need this
 	}
 
 	return 0;
