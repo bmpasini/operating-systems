@@ -9,10 +9,26 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define PORT "5000" // the port client will be connecting to 
+#define _BSD_SOURCE
+#define PORT "5000"
 
+// ****************************************************
+// Auxiliary functions
+// ****************************************************
 
-// get sockaddr, IPv4 or IPv6
+// get local IP address
+void get_ip_addr (char *ip_addr)
+{
+	char buffer[200];
+	struct hostent* host;
+
+	gethostname(buffer, 200);
+	host = (struct hostent *) gethostbyname(buffer);
+
+	strcpy(ip_addr,inet_ntoa(*((struct in_addr *)host->h_addr)));
+}
+
+// get socket address, either IPv6 or IPv4
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET) {
@@ -28,11 +44,9 @@ int main(void)
 	// Variables declaration
 	// ****************************************************
 
-	int sockfd;  
-	struct addrinfo hints, *servinfo, *p;
-	int rv;
-	char s[INET6_ADDRSTRLEN];
-	int infinite_loop = 1;
+	int sockfd, gai, infinite_loop = 1;
+	struct addrinfo serv_addr, *serv_info, *p;
+	char ip_addr[200], s[INET6_ADDRSTRLEN];
 	char *user_input = malloc(sizeof(char)*BUFSIZ);
 
 	// ****************************************************
@@ -41,63 +55,73 @@ int main(void)
 
 	while (infinite_loop) {
 
-		memset(&hints, 0, sizeof hints);
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
+		// configure server address
+		memset(&serv_addr, 0, sizeof serv_addr);
+		serv_addr.ai_family = AF_UNSPEC;
+		serv_addr.ai_socktype = SOCK_STREAM;
 
-		// ipconfig getifaddr en1
-		if ((rv = getaddrinfo("192.168.0.4", PORT, &hints, &servinfo)) != 0) {
-			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+		// get local IP address
+		get_ip_addr(ip_addr);
+
+		// setup address info
+		if ((gai = getaddrinfo(ip_addr, PORT, &serv_addr, &serv_info)) != 0) {
+			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai));
 			return 1;
 		}
 
-		// loop through all the results and connect to the first we can
-		for(p = servinfo; p != NULL; p = p->ai_next) {
+		// loop through serv_info and bind it to first option available
+		for(p = serv_info; p != NULL; p = p->ai_next) {
+			// raise error if socker isn't created
 			if ((sockfd = socket(p->ai_family, p->ai_socktype,
-					p->ai_protocol)) == -1) {
-				perror("client: socket");
+					p->ai_protocol)) < 0) {
+				perror("client: socket wasn't created");
 				continue;
 			}
 
-			if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+			// raise error if connection function fails
+			if (connect(sockfd, p->ai_addr, p->ai_addrlen) < 0) {
 				close(sockfd);
-				perror("client: connect");
+				perror("client: connect didn't work");
 				continue;
 			}
 
 			break;
 		}
 
+		// raise error if client failed to connect
 		if (p == NULL) {
 			fprintf(stderr, "client: failed to connect\n");
 			return 2;
 		}
 
+		// convert IPv4 and IPv6 addresses from binary to text form
 		inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
 				s, sizeof s);
+
+		// signalize who the client is connecting to
 		printf("client: connecting to %s\n", s);
 
-		freeaddrinfo(servinfo); // all done with this structure
+		// serv_info structure won't be used anymore
+		freeaddrinfo(serv_info);
 
 		// ****************************************************
 		// Get input and send it to server
 		// ****************************************************
 
-
-		// User is asked for an alpha numeric string input
+		// user is asked for an alpha numeric string input
 		printf("Enter an alpha numeric string: ");
 		fgets(user_input, BUFSIZ, stdin);
 
-		// If the input string is "quit" the infinite loop is interrupted, so that the socket can be closed
+		// if the input string is "quit" the infinite loop is interrupted
 		if (strncmp(user_input, "quit", 4) == 0) {
 			infinite_loop = 0;
 		}
 		
-		// Send input to server
-		if (send(sockfd, user_input, strlen(user_input), 0) == -1)
+		// send input to server
+		if (send(sockfd, user_input, strlen(user_input), 0) < 0)
 			perror("send");
 
-		// Close socket
+		// close socket
 		close(sockfd);
 	}
 

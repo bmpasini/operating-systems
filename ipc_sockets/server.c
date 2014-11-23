@@ -12,16 +12,19 @@
 #include <signal.h>
 #include <ctype.h>
 
-#define PORT "5000"  // the port users will be connecting to
-#define BACKLOG 10	 // how many pending connections queue will hold
-#define MAXDATASIZE 100 // max number of bytes we can get at once 
+#define PORT "5000"
+#define BACKLOG 10
 
-// function for finding the number of digits in a string
+// ****************************************************
+// Auxiliary functions
+// ****************************************************
+
+// find the number of digits in a string
 int digits_in_str(char *s)
 {
     int i = 0;
     while (*s != '\0') {
-    	if (isdigit(*s)) // counting number of digits
+    	if (isdigit(*s))
        		i++;
     s++;
     }
@@ -29,9 +32,12 @@ int digits_in_str(char *s)
     return i;
 }
 
-void sigchld_handler(int s)
+// dead child cleanup in a sigchld handler
+static void sigchld_hdl(int sig)
 {
-	while(waitpid(-1, NULL, WNOHANG) > 0);
+	// Wait for all dead processes to finish
+	while (waitpid(-1, NULL, WNOHANG) > 0) {
+	}
 }
 
 // get sockaddr, IPv4 or IPv6:
@@ -50,17 +56,12 @@ int main(void)
 	// Variables declaration
 	// ****************************************************
 
-	int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
-	struct addrinfo hints, *servinfo, *p;
-	struct sockaddr_storage their_addr; // connector's address information
+	int sock_fd, new_fd, gai, buf_len, sso = 1, infinite_loop = 1;
+	struct addrinfo serv_addr, *serv_info, *p;
+	struct sockaddr_storage client_addr;
 	socklen_t sin_size;
 	struct sigaction sa;
-	int yes=1;
-	char s[INET6_ADDRSTRLEN];
-	int rv;
-	int numbytes;
-	char buf[MAXDATASIZE];
-	int infinite_loop = 1;
+	char s[INET6_ADDRSTRLEN], buf[BUFSIZ];
 	FILE *digits;
 
 	// ****************************************************
@@ -74,74 +75,91 @@ int main(void)
 	// Setup of sockets communication
 	// ****************************************************
 
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE; // use my IP
+	// set server information
+	memset(&serv_addr, 0, sizeof serv_addr);
+	serv_addr.ai_family = AF_UNSPEC;
+	serv_addr.ai_socktype = SOCK_STREAM;
+	serv_addr.ai_flags = AI_PASSIVE; // use my IP
 
-	if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+	// get address info and raise error if it fails
+	if ((gai = getaddrinfo(NULL, PORT, &serv_addr, &serv_info)) != 0) {
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai));
 		return 1;
 	}
 
-	// loop through all the results and bind to the first we can
-	for(p = servinfo; p != NULL; p = p->ai_next) {
-		if ((sockfd = socket(p->ai_family, p->ai_socktype,
-				p->ai_protocol)) == -1) {
-			perror("server: socket");
+	// loop through serv_info and bind it to first option available
+	for (p = serv_info; p != NULL; p = p->ai_next) {
+		// raise error if socker isn't created
+		if ((sock_fd = socket(p->ai_family, p->ai_socktype,
+				p->ai_protocol)) < 0) {
+			perror("server: socket wasn't created");
 			continue;
 		}
 
-		if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
-				sizeof(int)) == -1) {
-			perror("setsockopt");
+		// raise error if setsockopt function fails
+		if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &sso,
+				sizeof(int)) < 0) {
+			perror("setsockopt: failed");
 			exit(1);
 		}
 
-		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-			close(sockfd);
-			perror("server: bind");
+		// raise error if bind function fails
+		if (bind(sock_fd, p->ai_addr, p->ai_addrlen) < 0) {
+			close(sock_fd);
+			perror("server: bind didn't work");
 			continue;
 		}
 
 		break;
 	}
 
+	// raise error if server failed to bind
 	if (p == NULL)  {
 		fprintf(stderr, "server: failed to bind\n");
 		return 2;
 	}
 
-	freeaddrinfo(servinfo); // all done with this structure
+	// serv_info structure won't be used anymore
+	freeaddrinfo(serv_info);
 
-	if (listen(sockfd, BACKLOG) == -1) {
-		perror("listen");
+	// listen to incoming sockets
+	if (listen(sock_fd, BACKLOG) < 0) {
+		perror("listen: failed");
 		exit(1);
 	}
 
-	sa.sa_handler = sigchld_handler; // reap all dead processes
+	// dead processes should be reaped
+	sa.sa_handler = sigchld_hdl;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = SA_RESTART;
-	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-		perror("sigaction");
+
+	// raise error if sigaction fails
+	if (sigaction(SIGCHLD, &sa, NULL) < 0) {
+		perror("server: sigaction failed");
 		exit(1);
 	}
 
-	printf("server: waiting for connections...\n");
+	// signalize that server is waiting for connections
+	printf("server: is waiting for connections\n");
 
 	// ****************************************************
 	// User enters input in an infinite loop
 	// ****************************************************
 
-	while(infinite_loop) {  // main accept() loop
-		sin_size = sizeof their_addr;
-		new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
-		if (new_fd == -1) {
+	while(infinite_loop) {
+
+		// accept incoming socket
+		sin_size = sizeof client_addr;
+		new_fd = accept(sock_fd, (struct sockaddr *)&client_addr, &sin_size);
+		if (new_fd < 0) {
 			perror("accept");
 			continue;
 		}
 
-		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
+		// convert IPv4 and IPv6 addresses from binary to text form
+		inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof s);
+
+		// signalize that server got connection
 		printf("server: got connection from %s\n", s);
 
 		// ****************************************************
@@ -149,31 +167,33 @@ int main(void)
 		// and output them in the file 'digits.out'
 		// ****************************************************
 
-		if ((numbytes = recv(new_fd, buf, MAXDATASIZE-1, 0)) == -1) {
-			perror("recv");
+		// receive buffer, raise error if fail
+		if ((buf_len = recv(new_fd, buf, BUFSIZ-1, 0)) < 0) {
+			perror("recv: couldn't receive from client");
 			exit(1);
 		}
 
-		buf[numbytes] = '\0';
+		// add '\0' symbol to char array in order to signalize end of string
+		buf[buf_len] = '\0';
 
-		printf("SERVER: received '%s'\n",buf);
+		// display string received in stdout
+		printf("server: string received '%s'\n",buf);
 
-
-		// If the input string is "quit" the infinite loop is interrupted
+		// if the input string is "quit" the infinite loop is interrupted
 		if (strncmp(buf, "quit", 4) == 0) {
 			infinite_loop = 0;
 		}
 
-		// The 'digits.out' file is opened so that the buffer can be appended into it
-		digits = fopen ("digits.out","a");
+		// the 'digits.out' file is opened so that the buffer can be appended into it
+		digits = fopen("digits.out","a");
 
-		// The number of digits in the input string is written in the output 'digits.out' file
+		// the number of digits in the input string is written in the output 'digits.out' file
 		fprintf(digits, "%d: ", digits_in_str(buf));
-		// Then, the input string is written in the output 'digits.out' file
+		// the input string is written in the output 'digits.out' file
 		fputs(buf, digits);
-		// The output file is closed
+		// close file
 		fclose(digits);
-		// Close socket that was accepted, so that it can accept the next one
+		// close socket that was accepted, so that it can accept the next one
 		close(new_fd);
 	}
 
