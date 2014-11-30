@@ -17,11 +17,14 @@ $ ./assignment_mt
 
 2. Modify the program and write a correct version that fixes the problem that you just discovered. Explain how you fixed the program.
 
-Please submit a zip file labelled as Assignment4_Yourname.zip. It should include a PDF file with explanations to questions above and a C source file with the modified program.
-
 Assignment 3 - Sockets Programming
 =============
 
 Modify the program described in Assignment 1 in such a way that the two programs can be run on different machines. The program receiver.c will now be the client program that will interact with the user. Call it client.c. The processor.c will be the backend program – call it server.c. The client and server programs have the same functionality as described in Assignment 1 except that they should use a different communication mechanism that will allow them to be run on different machines. Find out which communication mechanism can be used and use that in your program.  
 
-Please submit a zip file labeled as Assignment5_Yourname.zip. It should include a PDF file with explanation of what your code does (this is optional if your code is self explanatory with comments) and two C source files – client.c and server.c.
+Assignment 4 - Shell Program
+=============
+
+Implement a simple command line shell program in C that interacts with the user in the following way. By default, the shell gives a prompt to the user. When the user types in a command (in response to its prompt) and hits Enter, the shell creates a child process that executes the command he entered and displays the results if any. It then prompts for more user input by displaying the prompt again. 
+
+The shell can be limited to handling basic commands that do not involve piping and redirection.

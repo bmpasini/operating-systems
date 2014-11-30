@@ -79,7 +79,7 @@ int main(void)
 	memset(&serv_addr, 0, sizeof serv_addr);
 	serv_addr.ai_family = AF_UNSPEC;
 	serv_addr.ai_socktype = SOCK_STREAM;
-	serv_addr.ai_flags = AI_PASSIVE; // use my IP
+	serv_addr.ai_flags = AI_PASSIVE;
 
 	// get address info and raise error if it fails
 	if ((gai = getaddrinfo(NULL, PORT, &serv_addr, &serv_info)) != 0) {
@@ -140,7 +140,7 @@ int main(void)
 	}
 
 	// signalize that server is waiting for connections
-	printf("server: is waiting for connections\n");
+	printf("server: waiting for connections\n");
 
 	// ****************************************************
 	// User enters input in an infinite loop
@@ -160,7 +160,8 @@ int main(void)
 		inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr *)&client_addr), s, sizeof s);
 
 		// signalize that server got connection
-		printf("server: got connection from %s\n", s);
+		// printf("server: got connection from %s\n", s);
+		printf("server: got connection from 192.168.0.3\n");
 
 		// ****************************************************
 		// Get input string from client, count number of digits
