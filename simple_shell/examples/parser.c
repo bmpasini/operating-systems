@@ -1,46 +1,36 @@
+#include <stddef.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
-int main (int argc, char *argv[]) {
-int i=0;
-int d;
-float f;
-long int l;
-FILE *file = NULL;
-printf("\ncmdline args count=%d", argc);
 
-/* First argument is executable name only */
-printf("\nexe name=%s", argv[0]);
+#define BUFFERSIZE 128
+#define BLANK_STR " "
 
-for (i=1; i< argc; i++) {
-    printf("\narg%d=%s", i, argv[i]);
- }
+static char *inputs[BUFFERSIZE];
 
-/* Conversion string into int */
-d = atoi(argv[1]);
-printf("\nargv[1] in intger=%d",d);
+void prepare_inputs(char *input){
+	int i = 0;
+	char *token;
 
-/* Conversion string into float */
-f = atof(argv[1]);
-printf("\nargv[1] in float=%f",f);
+	while ((token = strsep(&input,BLANK_STR)) != NULL) {
+		if (inputs[i] == NULL)
+			inputs[i] = calloc(strlen(token) + 1, sizeof(char*));
+		else {
+			memset(inputs[i], 0, strlen(inputs[i]));
+		}
+		strncat(inputs[i], token, strlen(token));
+		i++;
+	}
+}
 
-/* Conversion string into long int */
-l = strtol(argv[2], NULL, 0);
-printf("\nargv[2] in long int=%ld",l);
+int main(void) {
+	char *input = calloc(BUFFERSIZE, sizeof(char*));
 
-/*Open file whose path is passed as an argument */
-file = fopen( argv[3], "r" );
-
-/* fopen returns NULL pointer on failure */
-if ( file == NULL) {
-    printf("\nCould not open file");
-  }
-else {
-    printf("\nFile (%s) opened", argv[3]);
-    /* Closing file */
-    fclose(file);
-  }
-
-printf("\n");
-return 0;
+	while(1) {
+		fgets(input, BUFFERSIZE, stdin);
+		prepare_inputs(input);
+	}
 }
