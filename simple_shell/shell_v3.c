@@ -19,12 +19,48 @@
 #define NULL_STR "\0"
 #define COLON_STR ":"
 #define SLASH_STR "/"
+#define PARENT_DIR_STR ".."
 #define PATH "PATH"
+#define CD "cd"
 #define CLEAR "clear\0"
+#define LOCAL ".local"
 #define QUIT_CMD "quit"
 #define EXIT_CMD "exit"
 
 static char *inputs[BUFFERSIZE], *paths[BUFFERSIZE];
+
+void cd(char *path)
+{
+	char last_backslash[BUFSIZ];
+	char path_fix[BUFSIZ];
+	char cwd[BUFSIZ];
+	char *cwdptr = calloc(BUFSIZ, sizeof(char*));
+
+	if(strncmp(path, SLASH_STR, 1) != 0 && strncmp(path, PARENT_DIR_STR, 2) != 0) { // true for the dir in cwd
+		getcwd(cwdptr, BUFSIZ);
+		strncat(cwdptr, SLASH_STR, 1);
+		strncat(cwdptr, path, strlen(path));
+		strncat(cwdptr, NULL_STR, strlen(path));
+		strncpy(cwd,cwdptr, BUFSIZ);
+		if(chdir(cwd) == -1)
+			perror("chdir");
+	} else if (strncmp(path, PARENT_DIR_STR, 2) == 0) {
+		getcwd(cwd, sizeof(cwd));
+		strncpy(last_backslash, strrchr(cwd, SLASH_SYMBOL), BUFFERSIZE);
+		cwd[strlen(cwd)-strlen(last_backslash)] = NULL_SYMBOL;
+		if(chdir(cwd) == -1)
+			perror("chdir");
+	} else { //true for dir w.r.t. /
+		if(chdir(path) == -1) {
+			getcwd(cwdptr, BUFSIZ);
+			strncat(cwdptr, path, strlen(path));
+			strncat(cwdptr, NULL_STR, strlen(path));
+			strncpy(cwd,cwdptr, BUFSIZ);
+			if(chdir(cwd) == -1)
+				perror("chdir");
+		}
+	}
+}
 
 void cmd_exec(char *cmd, char **envp)
 {
@@ -45,7 +81,7 @@ void get_paths(char **envp_helper) {
 	char *path_str;
 
 	path_str = strstr(envp_helper[i], PATH);
-	while(path_str == NULL) {
+	while(!path_str) {
 		i++;
 		path_str = strstr(envp_helper[i], PATH);
 	}
@@ -53,8 +89,8 @@ void get_paths(char **envp_helper) {
 	i = 0;
 	path_str += 5;
 
-   while ((token = strsep(&path_str, COLON_STR)) != NULL) {
-		paths[i] = calloc(strlen(token) + 1, sizeof(char));
+   while ((token = strsep(&path_str, COLON_STR))) {
+		paths[i] = calloc(strlen(token) + 1, sizeof(char*));
 		strncat(paths[i], token, strlen(token));
 		strncat(paths[i], SLASH_STR, 1);
 		i++;
@@ -66,7 +102,7 @@ void get_paths(char **envp_helper) {
 void get_cmd_pth(char *cmd)
 {
 	int i;
-	char *path = calloc(BUFFERSIZE, sizeof(char));
+	char *path = calloc(BUFFERSIZE, sizeof(char*));
 	FILE *file;
 
 	for(i = 0; paths[i]; i++) {
@@ -96,13 +132,13 @@ char *prepare_inputs(char *input)
 	int i = 0;
 	char *token, *cmd;
 
-	while ((token = strsep(&input,BLANK_STR)) != NULL) {
+	while ((token = strsep(&input, BLANK_STR))) {
 		inputs[i] = calloc(strlen(token) + 1, sizeof(char*));
 		strncat(inputs[i], token, strlen(token));
 		i++;
 	}
 
-	cmd = strncat(inputs[0], "\0", 1);
+	cmd = strncat(inputs[0], NULL_STR, 1);
 
 	return cmd;
 }
@@ -120,18 +156,18 @@ void print_prompt(void)
 	char *username = calloc(BUFFERSIZE, sizeof(char*));
 
 	gethostname(hostname, sizeof(hostname));
-	rm_substr(hostname, ".local");
+	rm_substr(hostname, LOCAL);
 
 	getcwd(path, BUFSIZ);
-	path = strrchr(path, '/') + 1;
+	path = strrchr(path, SLASH_SYMBOL) + 1;
 
 	username = getlogin();
 
-	printf("%s: %s %s$ ", hostname, path, username);
+	printf("%s:%s %s$ ", hostname, path, username);
 }
 
 void initilize(char **envp) {
-	char *cmd = calloc(BUFFERSIZE, sizeof(char));
+	char *cmd = calloc(BUFFERSIZE, sizeof(char*));
 	cmd = prepare_inputs(CLEAR);
 	get_cmd_pth(cmd);
 	cmd_exec(cmd, envp);
@@ -142,17 +178,16 @@ void sig_hdlr(int signo)
 {
 	if (signo != 0)
 		printf("\n");
-
 	print_prompt();
 	fflush(stdout);
 }
 
-int main(int argc, char *argv[], char *envp[]) 
+int main(int argc, char **argv, char **envp) 
 {
 	int fd, i;
 	char c;
-	char *input_str = calloc(BUFFERSIZE, sizeof(char));
-	char *cmd = calloc(BUFFERSIZE, sizeof(char));
+	char *input_str = calloc(BUFFERSIZE, sizeof(char*));
+	char *cmd = calloc(BUFFERSIZE, sizeof(char*));
 
 	// use ctrl+c to interrupt whatever the shell is doing
 	signal(SIGINT, SIG_IGN);
@@ -165,7 +200,7 @@ int main(int argc, char *argv[], char *envp[])
 	sig_hdlr(0);
 
 	// Main loop
-	while(strcmp(input_str, QUIT_CMD) != 0 && strcmp(input_str, EXIT_CMD) != 0) {
+	while(strcmp(input_str, QUIT_CMD) != 0 && strcmp(input_str, EXIT_CMD) != 0 && c != EOF) {
 		c = getchar();
 		switch(c) {
 			case '\n':
@@ -173,8 +208,12 @@ int main(int argc, char *argv[], char *envp[])
 					memset(cmd, 0, BUFFERSIZE);
 					// Parse the command line
 					cmd = prepare_inputs(input_str);
-					get_cmd_pth(cmd);
-					cmd_exec(cmd, envp);
+					if(strncmp(cmd, CD, 2) == 0) {
+						cd(inputs[1]);
+					} else {
+						get_cmd_pth(cmd);
+						cmd_exec(cmd, envp);
+					}
 					free_arr(inputs);
 				}
 				// Print the prompt string
@@ -192,12 +231,10 @@ int main(int argc, char *argv[], char *envp[])
 	free(input_str);
 	free_arr(paths);
 
-	printf("\n");
+	if(c == EOF) printf("\n");
+
 	return 0;
 }
-
-
-
     
     // shell initialization
     
@@ -218,36 +255,3 @@ int main(int argc, char *argv[], char *envp[])
     // Shell termination 
     
  // end main
-
-
-
-
-
-
-
-// void cd(char *pth) {
-
-// 	char *last_backslash;
-// 	char path[BUFFERSIZE];
-// 	char *token;
-// 	char cwd[BUFFERSIZE]; 
-
-// 	strcpy(path, pth);
-
-// 	if(pth[0] != '/')
-// 	{ // true for the dir in cwd
-// 		getcwd(cwd ,sizeof(cwd));
-// 		strcat(cwd,"/");
-// 		strcat(cwd,path);
-// 		chdir(cwd);
-// 	} else if (pth[0] == '..') {
-// 		getcwd(cwd ,sizeof(cwd));
-// 		*last_backslash = strrchr(cwd, "/");
-// 		*last_backslash = '\0';
-// 		chdir(cwd);
-// 	}
-// 	} else { //true for dir w.r.t. /
-// 		chdir(pth);
-// 	}
-// }
-

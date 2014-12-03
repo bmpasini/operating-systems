@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <string.h>
 
-
 #define BUFFERSIZE 128
 #define BLANK_STR " "
 
