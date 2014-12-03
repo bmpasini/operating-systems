@@ -1,10 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
 #include <signal.h>
-#include <sys/types.h>
+#include <string.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <ctype.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define BUFFERSIZE 128
 #define BLANK_SYMBOL ' '
@@ -186,7 +190,7 @@ char *prepare_inputs(char *input)
 	char *token, *cmd;
 
 	// store each word of the input string into an array of strings
-	while ((token = strsep(&input,BLANK_STR))) {
+	while ((token = strsep(&input, BLANK_STR))) {
 		inputs[i] = calloc(strlen(token) + 1, sizeof(char*));
 		strncat(inputs[i], token, strlen(token));
 		i++;
@@ -232,19 +236,6 @@ void print_prompt(void)
 }
 
 // ****************************************************************
-// * This function enables the use of the ctrl+c command to 	  *
-// * interrupt whatever the shell is doing. Also, it is used to   *
-// * print the promp for the first time.						  *
-// ****************************************************************
-void sig_hdlr(int signo)
-{
-	if (signo != 0)
-		printf(NEWLINE_STR);
-	print_prompt();
-	fflush(stdout);
-}
-
-// ****************************************************************
 // * This function clears the screen, for our new shell to open   *
 // * and prints the prompt for the first time.  				  *
 // * Also, it gets all the paths where the system commands may be *
@@ -260,6 +251,19 @@ void initilize(char **envp)
 	cmd_exec(cmd, envp);
 	sig_hdlr(0);
 	free_arr(inputs);
+}
+
+// ****************************************************************
+// * This function enables the use of the ctrl+c command to 	  *
+// * interrupt whatever the shell is doing. Also, it is used to   *
+// * print the promp for the first time.						  *
+// ****************************************************************
+void sig_hdlr(int signo)
+{
+	if (signo != 0)
+		printf(NEWLINE_STR);
+	print_prompt();
+	fflush(stdout);
 }
 
 // ****************************************************************
@@ -326,3 +330,4 @@ int main(int argc, char **argv, char **envp)
 	// end of main
 	return 0;
 }
+
